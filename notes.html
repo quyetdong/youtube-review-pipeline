@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strategy Notes — YouTube Review Pipeline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+
+    header { background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+    header h1 span { color: #ff4444; }
+    header a { color: #888; font-size: 13px; text-decoration: none; }
+    header a:hover { color: #ccc; }
+
+    main { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+
+    .page-title { margin-bottom: 8px; }
+    .page-title h2 { font-size: 26px; font-weight: 700; color: #fff; }
+    .page-subtitle { font-size: 14px; color: #555; margin-bottom: 40px; }
+
+    /* Section */
+    section { margin-bottom: 40px; }
+    section h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #ff4444; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    section h3::after { content: ''; flex: 1; height: 1px; background: #2a2a2a; }
+
+    /* Card grid */
+    .card-grid { display: grid; gap: 12px; }
+    .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+    .card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+    .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 18px 20px; }
+    .card h4 { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .card p, .card li { font-size: 13px; color: #999; line-height: 1.6; }
+    .card ul { padding-left: 16px; }
+    .card li { margin-bottom: 4px; }
+
+    /* Highlight card */
+    .card.highlight { border-color: #ff4444; background: #1a1212; }
+    .card.highlight h4 { color: #ff6666; }
+
+    /* Timeline / steps */
+    .steps { display: flex; flex-direction: column; gap: 10px; }
+    .step { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num { min-width: 26px; height: 26px; background: #2a2a2a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #888; flex-shrink: 0; margin-top: 1px; }
+    .step-body h4 { font-size: 14px; font-weight: 600; color: #ccc; margin-bottom: 3px; }
+    .step-body p { font-size: 13px; color: #777; line-height: 1.5; }
+
+    /* Tag list */
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { background: #1e1e1e; border: 1px solid #2e2e2e; border-radius: 20px; padding: 5px 13px; font-size: 12px; color: #aaa; }
+    .tag.green { border-color: #1e3a1e; background: #121a12; color: #4caf50; }
+    .tag.yellow { border-color: #3a3010; background: #1a1800; color: #c8a84b; }
+    .tag.red { border-color: #3a1010; background: #1a0808; color: #e05555; }
+
+    /* Inline note */
+    .note { background: #161616; border-left: 3px solid #ff4444; padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #888; line-height: 1.6; margin-top: 12px; }
+    .note strong { color: #ccc; }
+
+    /* Editable notes area */
+    .free-notes { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px; color: #ccc; font-size: 14px; font-family: inherit; line-height: 1.7; resize: vertical; min-height: 140px; }
+    .free-notes:focus { outline: none; border-color: #444; }
+    .save-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+    .btn-save { background: #ff4444; border: none; color: #fff; font-size: 13px; padding: 8px 18px; border-radius: 7px; cursor: pointer; font-weight: 500; }
+    .btn-save:hover { background: #e03333; }
+    .save-msg { font-size: 12px; color: #555; }
+    .save-msg.ok { color: #4caf50; }
+
+    /* Monetization timeline */
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: #2a2a2a; }
+    .tl-item { position: relative; margin-bottom: 18px; }
+    .tl-dot { position: absolute; left: -24px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: #2a2a2a; border: 2px solid #444; }
+    .tl-dot.fast { background: #4caf50; border-color: #4caf50; }
+    .tl-dot.mid { background: #f0a500; border-color: #f0a500; }
+    .tl-dot.long { background: #4a90e2; border-color: #4a90e2; }
+    .tl-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #666; margin-bottom: 3px; }
+    .tl-label.fast { color: #4caf50; }
+    .tl-label.mid { color: #f0a500; }
+    .tl-label.long { color: #4a90e2; }
+    .tl-title { font-size: 14px; font-weight: 600; color: #ccc; margin-bottom: 3px; }
+    .tl-desc { font-size: 13px; color: #777; line-height: 1.5; }
+
+    @media (max-width: 640px) {
+      .card-grid.cols-2, .card-grid.cols-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>▶ YouTube <span>Review</span> Pipeline</h1>
+  <a href="index.html">← Back to Pipeline</a>
+</header>
+
+<main>
+  <div class="page-title"><h2>Strategy Notes</h2></div>
+  <p class="page-subtitle">Summary of our monetization plan — last updated June 2026</p>
+
+  <!-- GOAL -->
+  <section>
+    <h3>Goal</h3>
+    <div class="card highlight">
+      <h4>Earn money through YouTube by publishing product review videos</h4>
+      <p>Review products bought on Shopee, TikTok Shop, and other platforms. Start on YouTube, repurpose to TikTok and Facebook Reels once the workflow is established. Target 1 video per week with Claude handling scripts, SEO, and content calendars.</p>
+    </div>
+  </section>
+
+  <!-- CHANNEL POSITIONING -->
+  <section>
+    <h3>Channel Positioning (pick one)</h3>
+    <div class="card-grid cols-2">
+      <div class="card">
+        <h4>💰 "Is it worth the money?"</h4>
+        <p>Budget-conscious angle. Review cheap Shopee/TikTok finds and give a clear verdict. Works well for a Vietnamese audience who wants to avoid wasting money.</p>
+      </div>
+      <div class="card">
+        <h4>💎 "Hidden gems"</h4>
+        <p>Focus on products that surprised you — positively or negatively. Builds curiosity and repeat viewers who want to discover deals before others.</p>
+      </div>
+      <div class="card">
+        <h4>🚫 "Don't buy before watching this"</h4>
+        <p>Negative framing builds trust fast. Warning people off bad products is just as valuable as recommending good ones — often more shareable.</p>
+      </div>
+      <div class="card">
+        <h4>🎯 Niche-specific (recommended later)</h4>
+        <p>Once you find which product category gets the most engagement, double down on it (gadgets, home goods, beauty, kitchen tools). Easier to grow a loyal audience.</p>
+      </div>
+    </div>
+    <div class="note"><strong>Starting recommendation:</strong> Begin with "Is it worth the money?" — it's versatile, works for any product category, and the verdict format keeps videos structured and easy to script.</div>
+  </section>
+
+  <!-- VIDEO STRUCTURE -->
+  <section>
+    <h3>Video Structure (repeat every time)</h3>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-body"><h4>Hook (0–10s)</h4><p>Show the product + the result upfront. Example: "This $3 phone holder either breaks in a week or it's the best deal on Shopee — let's find out."</p></div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-body"><h4>What it is + price + where to buy</h4><p>Name the product, price in VND/USD, platform. Drop the affiliate link in description here.</p></div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-body"><h4>Unboxing</h4><p>Quick, visual. Show packaging, what's included, first look.</p></div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-body"><h4>First impressions</h4><p>Build quality, feel, smell, packaging quality vs expectations.</p></div></div>
+      <div class="step"><div class="step-num">5</div><div class="step-body"><h4>Testing (the core)</h4><p>Actually use it. This is what viewers came for — don't rush this section.</p></div></div>
+      <div class="step"><div class="step-num">6</div><div class="step-body"><h4>Pros &amp; Cons</h4><p>Be honest. Even one real con builds more credibility than a perfect review.</p></div></div>
+      <div class="step"><div class="step-num">7</div><div class="step-body"><h4>Verdict + who it's for</h4><p>"Worth it if you need X, skip it if you need Y." Clear, specific.</p></div></div>
+      <div class="step"><div class="step-num">8</div><div class="step-body"><h4>CTA</h4><p>Link in description, subscribe, "tell me what to review next in the comments."</p></div></div>
+    </div>
+  </section>
+
+  <!-- HOW CLAUDE HELPS -->
+  <section>
+    <h3>How Claude Helps (weekly workflow)</h3>
+    <div class="card-grid cols-3">
+      <div class="card">
+        <h4>📋 Scripting</h4>
+        <p>Full voiceover script for each video, optimized for retention. Sized for the platform (60–90s TikTok/Reels, 5–10 min YouTube).</p>
+      </div>
+      <div class="card">
+        <h4>🔍 Idea & Trend Research</h4>
+        <p>Trending product categories, gaps competitors haven't covered, hooks for the first 3 seconds.</p>
+      </div>
+      <div class="card">
+        <h4>♻️ Repurposing</h4>
+        <p>One script → YouTube long-form + YouTube Short + TikTok + Facebook Reel. 3× output for the same filming effort.</p>
+      </div>
+      <div class="card">
+        <h4>🔎 SEO / Metadata</h4>
+        <p>Video title, description, tags, hashtags — optimized for search on each platform.</p>
+      </div>
+      <div class="card">
+        <h4>🖼 Thumbnails</h4>
+        <p>Thumbnail text ideas, on-screen caption text, A/B title options to test.</p>
+      </div>
+      <div class="card">
+        <h4>📅 Content Calendar</h4>
+        <p>Weekly posting plan so "a few hours" stays consistent instead of sporadic.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- MONETIZATION -->
+  <section>
+    <h3>Monetization Roadmap</h3>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot fast"></div>
+        <div class="tl-label fast">Fastest — start now</div>
+        <div class="tl-title">Shopee Affiliate + TikTok Shop Affiliate</div>
+        <div class="tl-desc">Link the exact product in the description. Earn commission per sale. No follower threshold required — you can earn from video #1. This is your primary income source before platforms unlock ad revenue.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot mid"></div>
+        <div class="tl-label mid">Medium term — 3–6 months</div>
+        <div class="tl-title">YouTube Partner Program</div>
+        <div class="tl-desc">Requires 1,000 subscribers + 4,000 watch hours (or Shorts: 1,000 subs + 10M Short views in 90 days). Unlocks ad revenue on all videos.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot mid"></div>
+        <div class="tl-label mid">Medium term</div>
+        <div class="tl-title">TikTok Creator Rewards Program</div>
+        <div class="tl-desc">Pays based on views for videos 1 min+. Eligibility: 10,000 followers + 100,000 views in 30 days.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot mid"></div>
+        <div class="tl-label mid">Medium term</div>
+        <div class="tl-title">Facebook In-Stream Ads / Reels Bonuses</div>
+        <div class="tl-desc">Available once you hit Facebook's eligibility thresholds. Repost your YouTube content here for passive extra income.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot long"></div>
+        <div class="tl-label long">Long term — once you have an audience</div>
+        <div class="tl-title">Brand Sponsorships</div>
+        <div class="tl-desc">Sellers pay you directly to review their product. Even a small, niche audience commands rates — 10,000 engaged subs beats 100,000 passive ones for sponsors.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EQUIPMENT -->
+  <section>
+    <h3>Equipment (minimal to start)</h3>
+    <div class="card-grid cols-3">
+      <div class="card">
+        <h4>📱 Camera</h4>
+        <p>Your phone is enough. Good lighting matters more than camera quality at this stage.</p>
+        <div class="tags" style="margin-top:10px"><span class="tag green">Have it already</span></div>
+      </div>
+      <div class="card">
+        <h4>💡 Lighting</h4>
+        <p>Natural window light is free and works well. A cheap ring light (~$10–20) if you want consistency.</p>
+        <div class="tags" style="margin-top:10px"><span class="tag yellow">Optional upgrade</span></div>
+      </div>
+      <div class="card">
+        <h4>🎙 Microphone</h4>
+        <p>A basic lapel mic (~$10–15). Audio quality affects retention more than video quality — worth getting early.</p>
+        <div class="tags" style="margin-top:10px"><span class="tag red">Buy soon</span></div>
+      </div>
+    </div>
+    <div class="note"><strong>Key principle:</strong> Consistency matters more than production quality. A simple voiceover review posted weekly for 3 months will usually outperform a "perfect" video posted once.</div>
+  </section>
+
+  <!-- PLATFORMS -->
+  <section>
+    <h3>Platform Strategy</h3>
+    <div class="card-grid cols-3">
+      <div class="card highlight">
+        <h4>▶ YouTube — Primary</h4>
+        <ul>
+          <li>Long-form reviews (5–10 min)</li>
+          <li>YouTube Shorts for clips</li>
+          <li>Best for search discovery</li>
+          <li>Path to Partner Program</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>TikTok — Repurpose</h4>
+        <ul>
+          <li>Shorter cuts (60–90s)</li>
+          <li>TikTok Shop affiliate links</li>
+          <li>Creator Rewards for 1 min+ videos</li>
+          <li>Fastest organic reach</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>Facebook — Repurpose</h4>
+        <ul>
+          <li>Reels (same cut as TikTok)</li>
+          <li>In-stream ads once eligible</li>
+          <li>Good for older demographic</li>
+          <li>Repost, don't re-edit</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FREE NOTES -->
+  <section>
+    <h3>My Notes</h3>
+    <textarea class="free-notes" id="free-notes" placeholder="Add your own notes here — channel name ideas, niche decisions, things to try, reminders…"></textarea>
+    <div class="save-row">
+      <button class="btn-save" onclick="saveNotes()">Save Notes</button>
+      <span class="save-msg" id="save-msg"></span>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Load saved notes
+  const notesEl = document.getElementById('free-notes');
+  notesEl.value = localStorage.getItem('yt-strategy-notes') || '';
+
+  function saveNotes() {
+    localStorage.setItem('yt-strategy-notes', notesEl.value);
+    const msg = document.getElementById('save-msg');
+    msg.className = 'save-msg ok';
+    msg.textContent = '✓ Saved';
+    setTimeout(() => { msg.textContent = ''; msg.className = 'save-msg'; }, 2000);
+  }
+
+  // Auto-save on blur
+  notesEl.addEventListener('blur', saveNotes);
+</script>
+
+</body>
+</html>
