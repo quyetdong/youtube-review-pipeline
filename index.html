@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Review Pipeline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+
+    /* Header */
+    header { background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; font-weight: 600; color: #fff; }
+    header h1 span { color: #ff4444; }
+    #save-indicator { font-size: 12px; color: #666; }
+    #save-indicator.saving { color: #f0a500; }
+    #save-indicator.saved { color: #4caf50; }
+
+    /* Tabs */
+    nav { display: flex; gap: 0; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; padding: 0 24px; }
+    nav button { background: none; border: none; color: #888; padding: 14px 20px; cursor: pointer; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    nav button:hover { color: #ccc; }
+    nav button.active { color: #ff4444; border-bottom-color: #ff4444; }
+
+    /* Panels */
+    .panel { display: none; padding: 24px; }
+    .panel.active { display: block; }
+
+    /* ── PIPELINE TAB ── */
+    .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .column { background: #1a1a1a; border-radius: 10px; padding: 16px; min-height: 300px; }
+    .column-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .column-header h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #888; }
+    .col-count { background: #2a2a2a; color: #999; font-size: 11px; border-radius: 10px; padding: 2px 7px; }
+
+    .card { background: #242424; border-radius: 8px; padding: 12px; margin-bottom: 10px; border: 1px solid #2e2e2e; }
+    .card-id { font-size: 10px; color: #555; font-weight: 600; letter-spacing: .05em; margin-bottom: 4px; }
+    .card-title { font-size: 14px; color: #e0e0e0; font-weight: 500; margin-bottom: 8px; }
+    .card-product { font-size: 11px; color: #888; margin-bottom: 8px; }
+    .card-notes { width: 100%; background: #1a1a1a; border: 1px solid #333; border-radius: 5px; color: #ccc; font-size: 12px; padding: 7px 9px; resize: vertical; min-height: 60px; font-family: inherit; }
+    .card-notes:focus { outline: none; border-color: #555; }
+    .card-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .btn-move { background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa; font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
+    .btn-move:hover { background: #333; color: #fff; }
+    .btn-del { background: none; border: none; color: #555; font-size: 12px; cursor: pointer; margin-left: auto; }
+    .btn-del:hover { color: #ff4444; }
+
+    .add-card-form { margin-top: 12px; }
+    .add-card-form input, .add-card-form select { width: 100%; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #ccc; padding: 8px 10px; font-size: 13px; margin-bottom: 6px; font-family: inherit; }
+    .add-card-form input:focus, .add-card-form select:focus { outline: none; border-color: #555; }
+    .btn-add { background: #ff4444; border: none; color: #fff; font-size: 13px; padding: 8px 14px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 500; }
+    .btn-add:hover { background: #e03333; }
+
+    /* ── PRODUCTS TAB ── */
+    .products-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .products-header h2 { font-size: 16px; font-weight: 600; }
+    .btn-primary { background: #ff4444; border: none; color: #fff; font-size: 13px; padding: 9px 16px; border-radius: 7px; cursor: pointer; font-weight: 500; }
+    .btn-primary:hover { background: #e03333; }
+
+    .product-form { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 20px; margin-bottom: 20px; display: none; }
+    .product-form.open { display: block; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: 12px; color: #888; font-weight: 500; }
+    .form-group input, .form-group select { background: #242424; border: 1px solid #333; border-radius: 6px; color: #ccc; padding: 9px 11px; font-size: 13px; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #555; }
+    .form-actions { display: flex; gap: 10px; margin-top: 14px; }
+    .btn-secondary { background: #2a2a2a; border: 1px solid #3a3a3a; color: #aaa; font-size: 13px; padding: 9px 16px; border-radius: 7px; cursor: pointer; }
+
+    .products-table { background: #1a1a1a; border-radius: 10px; overflow: hidden; border: 1px solid #2a2a2a; }
+    .products-table table { width: 100%; border-collapse: collapse; }
+    .products-table th { background: #141414; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .06em; padding: 12px 14px; text-align: left; border-bottom: 1px solid #2a2a2a; }
+    .products-table td { padding: 12px 14px; font-size: 13px; border-bottom: 1px solid #1e1e1e; vertical-align: middle; }
+    .products-table tr:last-child td { border-bottom: none; }
+    .products-table tr:hover td { background: #1e1e1e; }
+    .badge { display: inline-block; font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 600; }
+    .badge-reviewed { background: #1a3a1a; color: #4caf50; }
+    .badge-pending { background: #2a2a1a; color: #888; }
+    .platform-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; background: #222; color: #999; }
+    td a { color: #4aa3ff; text-decoration: none; font-size: 12px; }
+    td a:hover { text-decoration: underline; }
+
+    /* ── STATS TAB ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 20px; }
+    .stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; color: #fff; }
+    .stat-card .value span { font-size: 14px; color: #888; font-weight: 400; }
+
+    .stats-table { background: #1a1a1a; border-radius: 10px; overflow: hidden; border: 1px solid #2a2a2a; }
+    .stats-table-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #2a2a2a; }
+    .stats-table-header h3 { font-size: 15px; font-weight: 600; }
+    .stats-table table { width: 100%; border-collapse: collapse; }
+    .stats-table th { background: #141414; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .06em; padding: 12px 14px; text-align: left; border-bottom: 1px solid #2a2a2a; }
+    .stats-table td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #1e1e1e; }
+    .stats-table tr:last-child td { border-bottom: none; }
+    .stats-table input[type=number] { background: #242424; border: 1px solid #2e2e2e; border-radius: 5px; color: #ccc; padding: 5px 8px; font-size: 13px; width: 90px; font-family: inherit; }
+    .stats-table input[type=number]:focus { outline: none; border-color: #555; }
+
+    .empty-state { text-align: center; padding: 48px 24px; color: #555; font-size: 14px; }
+    .empty-state svg { opacity: .3; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>▶ YouTube <span>Review</span> Pipeline</h1>
+  <span id="save-indicator">●  all saved</span>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('pipeline')">Pipeline</button>
+  <button onclick="switchTab('products')">Products</button>
+  <button onclick="switchTab('stats')">Stats</button>
+</nav>
+
+<div id="tab-pipeline" class="panel active">
+  <div class="kanban" id="kanban"></div>
+</div>
+
+<div id="tab-products" class="panel">
+  <div class="products-header">
+    <h2>Product Log</h2>
+    <button class="btn-primary" onclick="toggleProductForm()">+ Add Product</button>
+  </div>
+  <div class="product-form" id="product-form">
+    <div class="form-grid">
+      <div class="form-group"><label>Product Name *</label><input id="p-name" placeholder="e.g. Magnetic phone holder" /></div>
+      <div class="form-group"><label>Platform *</label>
+        <select id="p-platform">
+          <option value="Shopee">Shopee</option>
+          <option value="TikTok Shop">TikTok Shop</option>
+          <option value="Lazada">Lazada</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Price (₫ or $)</label><input id="p-price" placeholder="e.g. 45,000₫" /></div>
+      <div class="form-group"><label>Category</label><input id="p-category" placeholder="e.g. Gadgets, Home, Beauty" /></div>
+      <div class="form-group full"><label>Product Link</label><input id="p-link" placeholder="https://..." /></div>
+      <div class="form-group full"><label>Notes</label><input id="p-notes" placeholder="First impressions, why you bought it..." /></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="addProduct()">Save Product</button>
+      <button class="btn-secondary" onclick="toggleProductForm()">Cancel</button>
+    </div>
+  </div>
+  <div class="products-table">
+    <table>
+      <thead><tr><th>#</th><th>Product</th><th>Platform</th><th>Price</th><th>Category</th><th>Status</th><th>Link</th><th></th></tr></thead>
+      <tbody id="products-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="tab-stats" class="panel">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Total Videos</div>
+      <div class="value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Views</div>
+      <div class="value" id="stat-views">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Earnings</div>
+      <div class="value" id="stat-earnings">$0 <span>USD</span></div>
+    </div>
+  </div>
+  <div class="stats-table">
+    <div class="stats-table-header">
+      <h3>Published Videos</h3>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Published</th><th>Views</th><th>Ad Revenue ($)</th><th>Affiliate ($)</th><th>Sponsor ($)</th></tr></thead>
+      <tbody id="stats-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const STAGES = ['Idea', 'Filming', 'Editing', 'Published'];
+let data = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem('yt-pipeline-v1');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { videos: [], products: [], nextId: 1 };
+}
+
+let saveTimer;
+function save() {
+  clearTimeout(saveTimer);
+  setSaveState('saving');
+  saveTimer = setTimeout(() => {
+    localStorage.setItem('yt-pipeline-v1', JSON.stringify(data));
+    setSaveState('saved');
+  }, 600);
+}
+
+function setSaveState(state) {
+  const el = document.getElementById('save-indicator');
+  el.className = state;
+  el.textContent = state === 'saving' ? '●  saving…' : '●  all saved';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'stats') renderStats();
+}
+
+// ── Pipeline ──────────────────────────────────────────────────────────────────
+function renderKanban() {
+  const board = document.getElementById('kanban');
+  board.innerHTML = '';
+  STAGES.forEach((stage, si) => {
+    const cards = data.videos.filter(v => v.stage === stage);
+    const col = document.createElement('div');
+    col.className = 'column';
+    col.innerHTML = `
+      <div class="column-header">
+        <h3>${stage}</h3>
+        <span class="col-count">${cards.length}</span>
+      </div>
+      ${cards.map(v => cardHTML(v, si)).join('')}
+      ${si === 0 ? addCardFormHTML() : ''}
+    `;
+    board.appendChild(col);
+  });
+}
+
+function cardHTML(v, si) {
+  const productName = v.productId ? (data.products.find(p => p.id === v.productId)?.name || '') : '';
+  const prevStage = si > 0 ? STAGES[si - 1] : null;
+  const nextStage = si < STAGES.length - 1 ? STAGES[si + 1] : null;
+  return `
+    <div class="card" id="card-${v.id}">
+      <div class="card-id">${v.id}</div>
+      <div class="card-title">${escHtml(v.title)}</div>
+      ${productName ? `<div class="card-product">📦 ${escHtml(productName)}</div>` : ''}
+      <textarea class="card-notes" placeholder="Script notes, hook ideas, links…" onchange="updateNotes('${v.id}', this.value)">${escHtml(v.notes || '')}</textarea>
+      <div class="card-actions">
+        ${prevStage ? `<button class="btn-move" onclick="moveCard('${v.id}', '${prevStage}')">← ${prevStage}</button>` : ''}
+        ${nextStage ? `<button class="btn-move" onclick="moveCard('${v.id}', '${nextStage}')">${nextStage} →</button>` : ''}
+        <button class="btn-del" onclick="deleteCard('${v.id}')" title="Delete">✕</button>
+      </div>
+    </div>`;
+}
+
+function addCardFormHTML() {
+  const productOptions = data.products.map(p => `<option value="${p.id}">${escHtml(p.name)}</option>`).join('');
+  return `
+    <div class="add-card-form">
+      <input id="new-title" placeholder="Video title or topic…" />
+      <select id="new-product">
+        <option value="">— link a product (optional) —</option>
+        ${productOptions}
+      </select>
+      <button class="btn-add" onclick="addCard()">+ Add Video</button>
+    </div>`;
+}
+
+function addCard() {
+  const title = document.getElementById('new-title').value.trim();
+  if (!title) return;
+  const productId = document.getElementById('new-product').value || null;
+  const id = 'REV-' + String(data.nextId++).padStart(3, '0');
+  data.videos.push({ id, title, stage: 'Idea', notes: '', productId, publishedDate: null, views: 0, adRevenue: 0, affiliate: 0, sponsor: 0 });
+  save();
+  renderKanban();
+}
+
+function moveCard(id, stage) {
+  const v = data.videos.find(v => v.id === id);
+  if (!v) return;
+  v.stage = stage;
+  if (stage === 'Published' && !v.publishedDate) v.publishedDate = new Date().toISOString().slice(0, 10);
+  save();
+  renderKanban();
+}
+
+function updateNotes(id, val) {
+  const v = data.videos.find(v => v.id === id);
+  if (v) { v.notes = val; save(); }
+}
+
+function deleteCard(id) {
+  if (!confirm('Delete this video card?')) return;
+  data.videos = data.videos.filter(v => v.id !== id);
+  save();
+  renderKanban();
+}
+
+// ── Products ──────────────────────────────────────────────────────────────────
+function toggleProductForm() {
+  document.getElementById('product-form').classList.toggle('open');
+}
+
+function addProduct() {
+  const name = document.getElementById('p-name').value.trim();
+  if (!name) return alert('Product name is required.');
+  const p = {
+    id: 'P-' + Date.now(),
+    name,
+    platform: document.getElementById('p-platform').value,
+    price: document.getElementById('p-price').value.trim(),
+    category: document.getElementById('p-category').value.trim(),
+    link: document.getElementById('p-link').value.trim(),
+    notes: document.getElementById('p-notes').value.trim(),
+  };
+  data.products.push(p);
+  save();
+  ['p-name','p-price','p-category','p-link','p-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('product-form').classList.remove('open');
+  renderProducts();
+}
+
+function renderProducts() {
+  const tbody = document.getElementById('products-body');
+  if (!data.products.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">No products yet. Add your first product above.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.products.map((p, i) => {
+    const reviewed = data.videos.some(v => v.productId === p.id);
+    return `<tr>
+      <td style="color:#555;font-size:11px">${i + 1}</td>
+      <td><strong>${escHtml(p.name)}</strong>${p.notes ? `<br><span style="font-size:11px;color:#666">${escHtml(p.notes)}</span>` : ''}</td>
+      <td><span class="platform-tag">${escHtml(p.platform)}</span></td>
+      <td>${escHtml(p.price)}</td>
+      <td>${escHtml(p.category)}</td>
+      <td><span class="badge ${reviewed ? 'badge-reviewed' : 'badge-pending'}">${reviewed ? 'Reviewed' : 'Pending'}</span></td>
+      <td>${p.link ? `<a href="${escHtml(p.link)}" target="_blank">View ↗</a>` : '—'}</td>
+      <td><button class="btn-del" onclick="deleteProduct('${p.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function deleteProduct(id) {
+  if (!confirm('Delete this product?')) return;
+  data.products = data.products.filter(p => p.id !== id);
+  save();
+  renderProducts();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function renderStats() {
+  const published = data.videos.filter(v => v.stage === 'Published');
+  let totalViews = 0, totalEarnings = 0;
+  published.forEach(v => {
+    totalViews += Number(v.views) || 0;
+    totalEarnings += (Number(v.adRevenue) || 0) + (Number(v.affiliate) || 0) + (Number(v.sponsor) || 0);
+  });
+  document.getElementById('stat-total').textContent = published.length;
+  document.getElementById('stat-views').textContent = totalViews.toLocaleString();
+  document.getElementById('stat-earnings').innerHTML = `$${totalEarnings.toFixed(2)} <span>USD</span>`;
+
+  const tbody = document.getElementById('stats-body');
+  if (!published.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">No published videos yet. Move a video to "Published" in the Pipeline tab.</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = published.map(v => `<tr>
+    <td style="color:#555;font-size:11px">${v.id}</td>
+    <td>${escHtml(v.title)}</td>
+    <td style="color:#666;font-size:12px">${v.publishedDate || '—'}</td>
+    <td><input type="number" min="0" value="${v.views || 0}" onchange="updateStat('${v.id}','views',this.value)" /></td>
+    <td><input type="number" min="0" step="0.01" value="${v.adRevenue || 0}" onchange="updateStat('${v.id}','adRevenue',this.value)" /></td>
+    <td><input type="number" min="0" step="0.01" value="${v.affiliate || 0}" onchange="updateStat('${v.id}','affiliate',this.value)" /></td>
+    <td><input type="number" min="0" step="0.01" value="${v.sponsor || 0}" onchange="updateStat('${v.id}','sponsor',this.value)" /></td>
+  </tr>`).join('');
+}
+
+function updateStat(id, field, val) {
+  const v = data.videos.find(v => v.id === id);
+  if (v) { v[field] = Number(val); save(); renderStats(); }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderKanban();
+renderProducts();
+</script>
+</body>
+</html>
